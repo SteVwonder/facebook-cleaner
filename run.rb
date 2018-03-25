@@ -1,12 +1,14 @@
+# coding: utf-8
 require 'selenium-webdriver'
 require 'interact'
 
 # This is are the actions, as the activity log page, does name them. If you want to not unlike stuff,
 # then you can just remove the 'Unlike' item from here. If you want to unfriend all people you
 # befriended that year, you could also add 'Unfriend' here.
-POSSIBLE_ACTIONS = ['Delete', 'Unlike', 'Hide from Timeline'].freeze
+POSSIBLE_ACTIONS = ['Delete'].freeze
 
-BROKEN_STRING = 'The page you requested was not found.'
+BROKEN_STRINGS = ['The page you requested was not found.', 'Unknown error', 'Sorry, something went wrong.']
+TIMEDOUT_STRING = "Sorry, your comment could not be deleted at this time. Please try again later."
 MORE_STRING = 'Load more from'
 
 class Eraser
@@ -16,10 +18,18 @@ class Eraser
     @retry = 0
     @running = true
     @broken_actions = []
+    @timedout_actions = []
     @closed_months = []
     ask_input
     login
-    delete_from_activity_log(@year)
+    while true
+      delete_from_activity_log(@year)
+      #@closed_months = []
+      #@broken_actions = []
+      @timedout_actions = []
+      @running = true
+      @year = ask 'Delete what year?'
+    end
   ensure
     driver.quit
   end
@@ -53,17 +63,23 @@ class Eraser
         days = driver.find_elements(:xpath, '//div[contains(@id, "tlUnit_")]')
         actions = days
           .map {|d| d.find_elements(:css, 'a')}
-          .flatten
-          .select {|l| POSSIBLE_ACTIONS.include?(l.text) && !@broken_actions.include?(l['href'].gsub(/ext=(.*)/, '')) }
+          .flatten.select{|l| POSSIBLE_ACTIONS.include?(l.text)}
+        p "# possible actions: #{actions.length}"
+        actions = actions.select {|l| !@broken_actions.include?(l['href'].gsub(/ext=(.*)/, '')) }
           .sort_by { |a| POSSIBLE_ACTIONS.index(a) }
+        p "# not broken actions: #{actions.length}"
         if actions.length > 0
           action = actions.first
           last_href = action['href'].gsub(/ext=(.*)/, '')
           action.click()
           if is_broken?
+            p "Found broken action: #{last_href['href']}"
             @broken_actions.push(last_href)
             driver.navigate.back
-          else
+          elsif is_timedout?
+            p "Found timed out action: #{last_href['href']}"
+            @timedout_actions.push(last_href)
+            driver.navigate.back
           end
         else
           begin
@@ -93,6 +109,7 @@ class Eraser
     months = driver.find_elements(:xpath, "//div[contains(@id, 'month_#{@year}_')]/a")
     selected_month = months.find {|l| !@closed_months.include?(l.text) }
     if selected_month
+      p "Moving on to #{selected_month.text}"
       @closed_months.push(selected_month.text)
       selected_month.click
     else
@@ -102,7 +119,16 @@ class Eraser
   end
 
   def is_broken?
-    driver.find_elements(:xpath, "//*[contains(text(), '#{BROKEN_STRING}')]").length > 0
+    BROKEN_STRINGS.each do |string|
+      if driver.find_elements(:xpath, "//*[contains(text(), '#{string}')]").length > 0
+        return true
+      end
+    end
+    return false
+  end
+
+  def is_timedout?
+    driver.find_elements(:xpath, "//*[contains(text(), '#{TIMEDOUT_STRING}')]").length > 0
   end
 
   def click_more_link
