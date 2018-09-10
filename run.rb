@@ -8,7 +8,8 @@ require 'interact'
 POSSIBLE_ACTIONS = ['Delete'].freeze
 
 BROKEN_STRINGS = ['The page you requested was not found.', 'Unknown error', 'Sorry, something went wrong.']
-TIMEDOUT_STRING = "Sorry, your comment could not be deleted at this time. Please try again later."
+TIMEDOUT_STRINGS = ["Sorry, your comment could not be deleted at this time. Please try again later.",
+                    "The page you requested cannot be displayed right now. It may be temporarily unavailable, the link you clicked on may be broken or expired, or you may not have permission to view this page."]
 MORE_STRING = 'Load more from'
 
 class Eraser
@@ -65,19 +66,19 @@ class Eraser
           .map {|d| d.find_elements(:css, 'a')}
           .flatten.select{|l| POSSIBLE_ACTIONS.include?(l.text)}
         p "# possible actions: #{actions.length}"
-        actions = actions.select {|l| !@broken_actions.include?(l['href'].gsub(/ext=(.*)/, '')) }
+        actions = actions.select {|l| !@broken_actions.include?(l['href'].gsub(/ext=(.*)/, '')) && !@timedout_actions.include?(l['href'].gsub(/ext=(.*)/, '')) }
           .sort_by { |a| POSSIBLE_ACTIONS.index(a) }
-        p "# not broken actions: #{actions.length}"
+        p "# not broken/timedout actions: #{actions.length}"
         if actions.length > 0
           action = actions.first
           last_href = action['href'].gsub(/ext=(.*)/, '')
           action.click()
           if is_broken?
-            p "Found broken action: #{last_href['href']}"
+            p "Found broken action: #{last_href}"
             @broken_actions.push(last_href)
             driver.navigate.back
           elsif is_timedout?
-            p "Found timed out action: #{last_href['href']}"
+            p "Found timed out action: #{last_href}"
             @timedout_actions.push(last_href)
             driver.navigate.back
           end
@@ -128,7 +129,12 @@ class Eraser
   end
 
   def is_timedout?
-    driver.find_elements(:xpath, "//*[contains(text(), '#{TIMEDOUT_STRING}')]").length > 0
+    TIMEDOUT_STRINGS.each do |string|
+      if driver.find_elements(:xpath, "//*[contains(text(), '#{string}')]").length > 0
+        return true
+      end
+    end
+    return false
   end
 
   def click_more_link
