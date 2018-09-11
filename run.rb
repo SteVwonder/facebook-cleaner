@@ -5,7 +5,7 @@ require 'interact'
 # This is are the actions, as the activity log page, does name them. If you want to not unlike stuff,
 # then you can just remove the 'Unlike' item from here. If you want to unfriend all people you
 # befriended that year, you could also add 'Unfriend' here.
-POSSIBLE_ACTIONS = ['Delete'].freeze
+POSSIBLE_ACTIONS = ['Delete', 'Unlike', 'Hide from Timeline'].freeze
 
 BROKEN_STRINGS = ['The page you requested was not found.', 'Unknown error', 'Sorry, something went wrong.']
 TIMEDOUT_STRINGS = ["Sorry, your comment could not be deleted at this time. Please try again later.",
@@ -23,13 +23,14 @@ class Eraser
     @closed_months = []
     ask_input
     login
-    while true
-      delete_from_activity_log(@year)
+    year = 2008
+    while year < 2017
+      delete_from_activity_log(year)
       #@closed_months = []
       #@broken_actions = []
       @timedout_actions = []
       @running = true
-      @year = ask 'Delete what year?'
+      year = year + 1
     end
   ensure
     driver.quit
@@ -39,7 +40,6 @@ class Eraser
     @email = ask 'E-Mail'
     @password = ask 'Password', echo: '*', forget: true
     @profile_name = ask 'Profile name'
-    @year = ask 'Delete what year?'
   end
 
   def login
